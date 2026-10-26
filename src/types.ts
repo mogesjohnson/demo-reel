@@ -10,6 +10,7 @@ export interface CliOptions {
   title?: string;
   author?: string;
   gifSeconds?: number;
+  frame: "browser" | "phone" | "none";
   music: boolean;
   voice: boolean;
   writeScript?: string;
