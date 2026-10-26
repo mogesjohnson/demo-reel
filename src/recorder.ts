@@ -125,7 +125,7 @@ async function scrollHeight(page: Page): Promise<number> {
   );
 }
 
-interface NavLink {
+export interface NavLink {
   href: string;
   text: string;
   attr: string;
@@ -142,7 +142,12 @@ async function findNavLinks(page: Page, max = 3): Promise<NavLink[]> {
       }));
     return [...pick("nav a[href], header a[href]"), ...pick("a[href]")];
   });
-  const home = new URL(page.url());
+  return filterNavLinks(raw, page.url(), max);
+}
+
+/** Keep up to `max` same-origin, non-file links, deduped, skipping hash/mailto/tel/javascript. Pure. */
+export function filterNavLinks(raw: NavLink[], pageUrl: string, max = 3): NavLink[] {
+  const home = new URL(pageUrl);
   const seen = new Set<string>([home.origin + home.pathname]);
   const out: NavLink[] = [];
   for (const l of raw) {
@@ -320,6 +325,11 @@ export async function record(opts: RecordOptions): Promise<Recording> {
   }
   await import("node:fs/promises").then((fs) => fs.rm(tmpDir, { recursive: true, force: true }));
   const lead = Math.round(leadSeconds * 100) / 100;
-  const cues = rawCues.filter((c) => c.text).map((c) => ({ t: Math.max(0, Math.round((c.t - lead) * 100) / 100), text: c.text }));
+  const cues = offsetCues(rawCues, lead);
   return { webmPath: dest, leadSeconds: lead, cues };
+}
+
+/** Shift caption times back by the trimmed lead so they match the trimmed video. Pure. */
+export function offsetCues(raw: Cue[], lead: number): Cue[] {
+  return raw.filter((c) => c.text).map((c) => ({ t: Math.max(0, Math.round((c.t - lead) * 100) / 100), text: c.text }));
 }

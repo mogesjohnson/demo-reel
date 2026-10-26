@@ -65,6 +65,17 @@ export function frameFilter(kind: Exclude<FrameKind, "none">, w: number, h: numb
   return { graph, W, H };
 }
 
+/** ffmpeg args that overlay `input` on a W x H gradient using `graph`. */
+export function frameArgs(input: string, graph: string, W: number, H: number, out: string): string[] {
+  return [
+    "-y", "-i", input,
+    "-f", "lavfi", "-i", `gradients=s=${W}x${H}:c0=0x6366f1:c1=0xec4899:x0=0:y0=0:x1=${W}:y1=${H}:speed=0.0001`,
+    "-filter_complex", graph, "-map", "[out]",
+    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-preset", "veryfast",
+    out,
+  ];
+}
+
 async function probeSize(file: string): Promise<{ w: number; h: number } | undefined> {
   const r = await run(["-hide_banner", "-i", file]);
   const m = /, (\d{2,5})x(\d{2,5})[, ]/.exec(r.stderr);
@@ -81,13 +92,7 @@ export async function frameVideo(input: string, outDir: string, kind: Exclude<Fr
   let lastErr = "";
   for (const withText of [true, false]) {
     const { graph, W, H } = frameFilter(kind, w, h, url, withText);
-    const r = await run([
-      "-y", "-i", input,
-      "-f", "lavfi", "-i", `gradients=s=${W}x${H}:c0=0x6366f1:c1=0xec4899:x0=0:y0=0:x1=${W}:y1=${H}:speed=0.0001`,
-      "-filter_complex", graph, "-map", "[out]",
-      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-preset", "veryfast",
-      out,
-    ]);
+    const r = await run(frameArgs(input, graph, W, H, out));
     if (r.code === 0) return out;
     lastErr = r.stderr.slice(-800);
   }

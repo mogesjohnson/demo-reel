@@ -1,7 +1,7 @@
 import { chromium } from "playwright";
 import type { DemoScript, Step } from "./script";
 
-interface Found {
+export interface Found {
   headings: { text: string; y: number }[];
   nav: { text: string; selector: string }[];
   buttons: { text: string; selector: string }[];
@@ -61,6 +61,14 @@ export async function writeAutoScript(url: string): Promise<DemoScript> {
         : [];
       return { headings, nav, buttons, inputs };
     });
+    return buildSteps(found, url);
+  } finally {
+    await browser.close();
+  }
+}
+
+/** Turn the elements found on a page into a demo script. Pure. */
+export function buildSteps(found: Found, url: string): DemoScript {
     const steps: Step[] = [{ action: "wait", ms: 800, caption: "Home" }];
     for (const h of found.headings) steps.push({ action: "scroll", y: Math.round(h.y), caption: h.text }, { action: "wait", ms: 900 });
     if (found.inputs.length) {
@@ -76,7 +84,4 @@ export async function writeAutoScript(url: string): Promise<DemoScript> {
     }
     steps.push({ action: "wait", ms: 800 });
     return { steps };
-  } finally {
-    await browser.close();
-  }
 }

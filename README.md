@@ -106,6 +106,17 @@ A default-walkthrough run against https://mogesjohnson.github.io/BEST-OF-AI-DEV/
 15 second, 1280x720 `demo.webm` of about 5.6 MB (2.6 MB as mp4). Videos are kept out of git
 because they are over 2 MB; run the command above to make your own.
 
+## Development
+
+```sh
+npm ci
+npm test   # typecheck, build, and run the unit tests (no network, no browser)
+```
+
+CI runs this on Ubuntu and Windows, checks that `action.yml` parses, and does a smoke
+recording of a local fixture page on Ubuntu (`node test/smoke.js` after
+`npx playwright install --with-deps chromium`).
+
 ## License
 
 MIT

@@ -1,0 +1,9 @@
+{
+  "headings": [{ "text": "Welcome", "y": 0 }, { "text": "Features", "y": 612.4 }],
+  "nav": [{ "text": "Pricing", "selector": "a[href=\"/pricing\"]" }],
+  "buttons": [{ "text": "Get started", "selector": "#cta" }],
+  "inputs": [
+    { "selector": "input[name=\"email\"]", "type": "email", "name": "email" },
+    { "selector": "#msg", "type": "textarea", "name": "message" }
+  ]
+}

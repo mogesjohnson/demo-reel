@@ -5,3 +5,4 @@ demo-reel-out/
 *.mp4
 *.gif
 .env*
+smoke-out/
