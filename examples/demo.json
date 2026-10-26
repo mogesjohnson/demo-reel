@@ -1,0 +1,9 @@
+{
+  "steps": [
+    { "action": "wait", "ms": 1200, "caption": "Welcome to BEST-OF-AI-DEV" },
+    { "action": "scroll", "y": 700, "caption": "Scrolling through the docs" },
+    { "action": "wait", "ms": 1000 },
+    { "action": "scroll", "y": 0, "caption": "Back to the top" },
+    { "action": "wait", "ms": 800, "caption": "Thanks for watching" }
+  ]
+}
