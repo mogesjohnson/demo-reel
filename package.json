@@ -1,0 +1,23 @@
+{
+  "name": "demo-reel",
+  "version": "0.1.0",
+  "description": "Record a short walkthrough video of a web app for portfolios and READMEs.",
+  "main": "dist/cli.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js"
+  },
+  "license": "MIT",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "playwright": "^1.64.1",
+    "typescript": "^5.9.3"
+  },
+  "bin": {
+    "demo-reel": "dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
