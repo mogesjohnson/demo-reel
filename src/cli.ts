@@ -4,6 +4,8 @@ import path from "node:path";
 import { validateScript, type DemoScript } from "./script";
 import { record } from "./recorder";
 import { convert } from "./convert";
+import { frameVideo } from "./frame";
+import { hasFfmpeg } from "./convert";
 import { writeSnippet } from "./snippet";
 import type { CliOptions } from "./types";
 
@@ -18,10 +20,13 @@ const USAGE = `Usage: demo-reel <url> [--script demo.json] [--out dir] [--gif] [
   --title <text>   Intro card title (default: the page title)
   --author <name>  Outro card "Built by" name (default: git user.name)
   --no-cards       Skip the intro and outro cards
+  --no-zoom        Do not zoom toward click and type targets
+  --frame <kind>   browser, phone or none (default): write demo-framed.mp4 with a
+                   gradient background and device frame (needs ffmpeg)
   -h, --help       Show this help`;
 
 export function parseArgs(argv: string[]): CliOptions {
-  const opts: Partial<CliOptions> = { outDir: "demo-reel-out", gif: false, mp4: false, size: "720p", cards: true };
+  const opts: Partial<CliOptions> = { outDir: "demo-reel-out", gif: false, mp4: false, size: "720p", cards: true, zoom: true, frame: "none" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => {
@@ -37,6 +42,12 @@ export function parseArgs(argv: string[]): CliOptions {
     else if (a === "--gif") opts.gif = true;
     else if (a === "--mp4") opts.mp4 = true;
     else if (a === "--no-cards") opts.cards = false;
+    else if (a === "--no-zoom") opts.zoom = false;
+    else if (a === "--frame") {
+      const v = val();
+      if (v !== "browser" && v !== "phone" && v !== "none") throw new Error(`--frame must be browser, phone or none (got ${v})`);
+      opts.frame = v;
+    }
     else if (a === "--title") opts.title = val();
     else if (a === "--author") opts.author = val();
     else if (a === "--size") {
@@ -96,6 +107,7 @@ async function main(): Promise<void> {
     script,
     log,
     size: opts.size,
+    zoom: opts.zoom,
     cards: opts.cards ? { title: opts.title, author: opts.author } : false,
   });
   const conv = await convert(webmPath, outDir, {
@@ -110,6 +122,10 @@ async function main(): Promise<void> {
   log(`saved ${webmPath} (${(size / 1024).toFixed(0)} KB)`);
   if (conv.mp4Path) log(`saved ${conv.mp4Path}`);
   if (conv.gifPath) log(`saved ${conv.gifPath}`);
+  if (opts.frame !== "none") {
+    if (await hasFfmpeg()) log(`saved ${await frameVideo(conv.mp4Path ?? webmPath, outDir, opts.frame, opts.url)}`);
+    else log(`ffmpeg was not found on PATH, so --frame ${opts.frame} was skipped.`);
+  }
 
   const snippet = await writeSnippet({ outDir, url: opts.url, webmPath, ...conv });
   log(`wrote ${snippet}`);

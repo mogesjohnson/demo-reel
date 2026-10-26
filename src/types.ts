@@ -9,6 +9,8 @@ export interface CliOptions {
   title?: string;
   author?: string;
   gifSeconds?: number;
+  zoom: boolean;
+  frame: "browser" | "phone" | "none";
 }
 
 export interface RecordResult {

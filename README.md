@@ -20,6 +20,7 @@ npx tsc
 ```sh
 node dist/cli.js <url> [--script demo.json] [--out dir] [--gif] [--mp4]
   [--size 720p|1080p|mobile] [--title text] [--author name] [--no-cards] [--gif-seconds n]
+  [--no-zoom] [--frame browser|phone|none]
 ```
 
 | Option | Meaning |
@@ -33,6 +34,8 @@ node dist/cli.js <url> [--script demo.json] [--out dir] [--gif] [--mp4]
 | `--title <text>` | Intro card title (default: the page title) |
 | `--author <name>` | Outro card "Built by" name (default: `git config user.name`) |
 | `--no-cards` | Skip the 2 second intro and outro title cards |
+| `--no-zoom` | Turn off the zoom on clicks (on by default: before each click or type target, the page eases to a 1.6x CSS scale centered on the target over 600 ms, holds during the action, then eases back out) |
+| `--frame <kind>` | `browser`, `phone` or `none` (default). Writes `demo-framed.mp4`: the video on a soft gradient with rounded corners and a browser top bar (three dots and a URL bar) or a phone bezel, drawn with pure ffmpeg filters. Skipped with a message when ffmpeg is missing |
 
 With `ffmpeg` on PATH, demo-reel also trims the blank frames before the first paint.
 If `ffmpeg` is not on PATH, trimming, `--gif` and `--mp4` are skipped with a message.
