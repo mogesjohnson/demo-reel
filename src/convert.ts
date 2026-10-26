@@ -22,24 +22,45 @@ export async function hasFfmpeg(): Promise<boolean> {
 export async function trimLead(webm: string, lead: number): Promise<string> {
   if (lead < 0.05) return webm;
   const tmp = webm.replace(/\.webm$/, ".trim.webm");
-  const r = await run("ffmpeg", ["-y", "-ss", lead.toFixed(2), "-i", webm, "-c:v", "libvpx", "-b:v", "2M", "-crf", "10", "-deadline", "realtime", "-cpu-used", "8", tmp]);
+  const r = await run("ffmpeg", trimArgs(webm, lead, tmp));
   if (r.code !== 0) return webm;
   await import("node:fs/promises").then((fs) => fs.rename(tmp, webm));
   return webm;
 }
 
+/** ffmpeg args that drop the first `lead` seconds of `webm` into `tmp`. */
+export function trimArgs(webm: string, lead: number, tmp: string): string[] {
+  return ["-y", "-ss", lead.toFixed(2), "-i", webm, "-c:v", "libvpx", "-b:v", "2M", "-crf", "10", "-deadline", "realtime", "-cpu-used", "8", tmp];
+}
+
+const GIF_FILTERS = "fps=10,scale=720:-1:flags=lanczos";
+const gifLimit = (maxSeconds?: number) => (maxSeconds && maxSeconds > 0 ? ["-t", String(maxSeconds)] : []);
+
+/** ffmpeg args for the gif palette pass. */
+export function gifPaletteArgs(webm: string, palette: string, maxSeconds?: number): string[] {
+  return ["-y", ...gifLimit(maxSeconds), "-i", webm, "-vf", `${GIF_FILTERS},palettegen=max_colors=128:stats_mode=diff`, palette];
+}
+
+/** ffmpeg args for the gif encode pass using `palette`. */
+export function gifArgs(webm: string, palette: string, gif: string, maxSeconds?: number): string[] {
+  return [
+    "-y", ...gifLimit(maxSeconds), "-i", webm, "-i", palette,
+    "-lavfi", `${GIF_FILTERS}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle`,
+    gif,
+  ];
+}
+
+/** ffmpeg args that convert `webm` to an even-sized h264 `mp4`. */
+export function mp4Args(webm: string, mp4: string): string[] {
+  return ["-y", "-i", webm, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", mp4];
+}
+
 export async function toGif(webm: string, outDir: string, maxSeconds?: number): Promise<string> {
   const palette = path.join(outDir, ".palette.png");
   const gif = path.join(outDir, "demo.gif");
-  const filters = "fps=10,scale=720:-1:flags=lanczos";
-  const limit = maxSeconds && maxSeconds > 0 ? ["-t", String(maxSeconds)] : [];
-  let r = await run("ffmpeg", ["-y", ...limit, "-i", webm, "-vf", `${filters},palettegen=max_colors=128:stats_mode=diff`, palette]);
+  let r = await run("ffmpeg", gifPaletteArgs(webm, palette, maxSeconds));
   if (r.code !== 0) throw new Error(`ffmpeg palettegen failed:\n${r.stderr.slice(-800)}`);
-  r = await run("ffmpeg", [
-    "-y", ...limit, "-i", webm, "-i", palette,
-    "-lavfi", `${filters}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle`,
-    gif,
-  ]);
+  r = await run("ffmpeg", gifArgs(webm, palette, gif, maxSeconds));
   await import("node:fs/promises").then((fs) => fs.rm(palette, { force: true }));
   if (r.code !== 0) throw new Error(`ffmpeg gif failed:\n${r.stderr.slice(-800)}`);
   return gif;
@@ -47,12 +68,7 @@ export async function toGif(webm: string, outDir: string, maxSeconds?: number): 
 
 export async function toMp4(webm: string, outDir: string): Promise<string> {
   const mp4 = path.join(outDir, "demo.mp4");
-  const r = await run("ffmpeg", [
-    "-y", "-i", webm,
-    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-    "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-    mp4,
-  ]);
+  const r = await run("ffmpeg", mp4Args(webm, mp4));
   if (r.code !== 0) throw new Error(`ffmpeg mp4 failed:\n${r.stderr.slice(-800)}`);
   return mp4;
 }
