@@ -20,7 +20,7 @@ const USAGE = `Usage: demo-reel <url> [--script demo.json] [--out dir] [--gif] [
   --title <text>   Intro card title (default: the page title)
   --author <name>  Outro card "Built by" name (default: git user.name)
   --no-cards       Skip the intro and outro cards
-  --no-zoom        Do not zoom toward click and type targets
+  --no-zoom        Do not zoom into click and type targets
   --frame <kind>   browser, phone or none (default): write demo-framed.mp4 with a
                    gradient background and device frame (needs ffmpeg)
   -h, --help       Show this help`;
@@ -107,8 +107,8 @@ async function main(): Promise<void> {
     script,
     log,
     size: opts.size,
-    zoom: opts.zoom,
     cards: opts.cards ? { title: opts.title, author: opts.author } : false,
+    zoom: opts.zoom,
   });
   const conv = await convert(webmPath, outDir, {
     gif: opts.gif,
@@ -131,7 +131,9 @@ async function main(): Promise<void> {
   log(`wrote ${snippet}`);
 }
 
-main().catch((e) => {
-  console.error(`demo-reel: ${(e as Error).message}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(`demo-reel: ${(e as Error).message}`);
+    process.exit(1);
+  });
+}

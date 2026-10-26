@@ -3,6 +3,9 @@ import { mkdir, rename, copyFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { Captions } from "./captions";
+import { zoomPulse } from "./zoom";
+
+let zoomEnabled = true;
 import type { DemoScript, Step } from "./script";
 
 export const SIZES = {
@@ -21,52 +24,8 @@ export interface RecordOptions {
   size?: SizeName;
   /** Intro/outro cards; omit or set false to disable. */
   cards?: { title?: string; author?: string } | false;
-  /** Zoom toward click/type targets (default true). */
+  /** Zoom into click and type targets (default true). */
   zoom?: boolean;
-}
-
-let zoomEnabled = true;
-const ZOOM_SCALE = 1.6;
-const ZOOM_MS = 600;
-
-/** Ease the page toward (x, y) viewport coords with a CSS scale on <html>. */
-async function zoomIn(page: Page, x: number, y: number): Promise<void> {
-  if (!zoomEnabled) return;
-  await page
-    .evaluate(
-      ([x, y, s, ms]) => {
-        const el = document.documentElement;
-        el.style.transformOrigin = `${x + window.scrollX}px ${y + window.scrollY}px`;
-        el.style.transition = `transform ${ms}ms cubic-bezier(0.65, 0, 0.35, 1)`;
-        void el.offsetWidth;
-        el.style.transform = `scale(${s})`;
-      },
-      [x, y, ZOOM_SCALE, ZOOM_MS] as const,
-    )
-    .catch(() => {});
-  await sleep(ZOOM_MS + 50);
-}
-
-async function zoomOut(page: Page): Promise<void> {
-  if (!zoomEnabled) return;
-  const zoomed = await page
-    .evaluate(() => {
-      const el = document.documentElement;
-      if (!el.style.transform) return false;
-      el.style.transform = "scale(1)";
-      return true;
-    })
-    .catch(() => false);
-  if (!zoomed) return;
-  await sleep(ZOOM_MS + 50);
-  await page
-    .evaluate(() => {
-      const el = document.documentElement;
-      el.style.transform = "";
-      el.style.transition = "";
-      el.style.transformOrigin = "";
-    })
-    .catch(() => {});
 }
 
 export interface Recording {
@@ -133,8 +92,8 @@ async function pointAt(page: Page, captions: Captions, selector: string): Promis
     const x = box.x + box.width / 2;
     const y = box.y + box.height / 2;
     await captions.moveCursor(x, y, 650);
-    await zoomIn(page, x, y);
-    await captions.ripple(x, y);
+    if (zoomEnabled) await zoomPulse(page, x, y, () => captions.ripple(x, y));
+    else await captions.ripple(x, y);
     await sleep(250);
     return true;
   } catch {
@@ -227,8 +186,6 @@ async function defaultWalkthrough(page: Page, captions: Captions, url: string, l
     const sel = `a[href=${JSON.stringify(link.attr)}]`;
     await captions.show(`Visiting: ${label}`);
     await pointAt(page, captions, `nav ${sel}, header ${sel}, ${sel}`);
-    await sleep(300);
-    await zoomOut(page);
     try {
       await gotoAndSettle(page, captions, link.href);
     } catch (e) {
@@ -260,15 +217,12 @@ async function runStep(page: Page, captions: Captions, step: Step, baseUrl: stri
       await pointAt(page, captions, step.selector!);
       await page.locator(step.selector!).first().click({ timeout: 10_000 });
       await settle(page, 5_000);
-      await zoomOut(page);
       if (page.url() !== before) await captions.reinject();
       break;
     }
     case "type":
       await pointAt(page, captions, step.selector!);
       await page.locator(step.selector!).first().pressSequentially(step.text!, { delay: 60 });
-      await sleep(300);
-      await zoomOut(page);
       break;
     case "wait":
       if (step.selector) await page.locator(step.selector).first().waitFor({ timeout: step.ms ?? 10_000 });
@@ -296,12 +250,12 @@ async function runStep(page: Page, captions: Captions, step: Step, baseUrl: stri
 /** Record the walkthrough and return the path of the saved .webm. */
 export async function record(opts: RecordOptions): Promise<Recording> {
   const log = opts.log ?? (() => {});
-  zoomEnabled = opts.zoom !== false;
   await mkdir(opts.outDir, { recursive: true });
   const tmpDir = path.join(opts.outDir, ".raw");
   const browser = await chromium.launch({ headless: true });
   let webm: string | undefined;
   let leadSeconds = 0;
+  zoomEnabled = opts.zoom !== false;
   const SIZE = SIZES[opts.size ?? "720p"];
   try {
     const context = await browser.newContext({
