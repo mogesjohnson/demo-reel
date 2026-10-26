@@ -1,0 +1,5 @@
+{ "steps": [
+  { "action": "wait", "ms": 300, "caption": "Smoke" },
+  { "action": "click", "selector": "#go" },
+  { "action": "wait", "ms": 300 }
+] }

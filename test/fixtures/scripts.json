@@ -1,0 +1,23 @@
+{
+  "valid": { "steps": [
+    { "action": "goto", "url": "/about", "caption": "About" },
+    { "action": "type", "selector": "#q", "text": "" },
+    { "action": "scroll", "selector": "#footer" },
+    { "action": "wait", "selector": ".ready" }
+  ] },
+  "invalid": [
+    [null, "JSON object"],
+    ["str", "JSON object"],
+    [{}, "\"steps\" array"],
+    [{ "steps": "x" }, "\"steps\" array"],
+    [{ "steps": [1] }, "must be an object"],
+    [{ "steps": [{ "action": "fly" }] }, "must be one of"],
+    [{ "steps": [{ "action": "click", "selector": "" }] }, "\"click\" needs \"selector\""],
+    [{ "steps": [{ "action": "type", "selector": "a" }] }, "\"type\" needs \"text\""],
+    [{ "steps": [{ "action": "wait" }] }, "\"wait\" needs"],
+    [{ "steps": [{ "action": "wait", "ms": "5" }] }, "ms: must be a number"],
+    [{ "steps": [{ "action": "scroll", "y": null }] }, "y: must be a number"],
+    [{ "steps": [{ "action": "goto" }] }, "\"goto\" needs \"url\""],
+    [{ "steps": [{ "action": "click", "selector": "a", "caption": 3 }] }, "caption: must be a string"]
+  ]
+}

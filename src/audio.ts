@@ -20,35 +20,43 @@ function run(cmd: string, args: string[], input?: string): Promise<{ code: numbe
   });
 }
 
-async function onPath(cmd: string): Promise<boolean> {
+export async function onPath(cmd: string): Promise<boolean> {
   const probe = process.platform === "win32" ? ["where", [cmd]] : ["sh", ["-c", `command -v ${cmd}`]];
   return (await run(probe[0] as string, probe[1] as string[])).code === 0;
 }
 
 type Tts = (text: string, outFile: string) => Promise<boolean>;
 
+export type TtsName = "say" | "System.Speech" | "espeak-ng" | "espeak" | "pico2wave";
+
+/** Pick the TTS engine for `platform`, probing commands with `which`. Pure apart from `which`. */
+export async function detectTts(platform: string, which: (cmd: string) => Promise<boolean>): Promise<TtsName | undefined> {
+  if (platform === "darwin" && (await which("say"))) return "say";
+  if (platform === "win32" && (await which("powershell"))) return "System.Speech";
+  for (const e of ["espeak-ng", "espeak", "pico2wave"] as const) if (await which(e)) return e;
+  return undefined;
+}
+
 /** Find a locally installed TTS engine. Never installs or downloads anything. */
-export async function findTts(): Promise<{ name: string; speak: Tts } | undefined> {
+export async function findTts(platform: string = process.platform, which = onPath): Promise<{ name: string; speak: Tts } | undefined> {
   const ok = async (r: Promise<{ code: number }>) => (await r).code === 0;
-  if (process.platform === "darwin" && (await onPath("say"))) {
+  const name = await detectTts(platform, which);
+  if (!name) return undefined;
+  if (name === "say") {
     return { name: "say", speak: (t, f) => ok(run("say", ["-o", f, "--data-format=LEI16@22050", t])) };
   }
-  if (process.platform === "win32" && (await onPath("powershell"))) {
+  if (name === "System.Speech") {
     const speak: Tts = (t, f) =>
       ok(run("powershell", ["-NoProfile", "-Command",
         "Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; " +
         `$s.SetOutputToWaveFile('${f.replace(/'/g, "''")}'); $s.Speak([Console]::In.ReadToEnd()); $s.Dispose()`], t));
     return { name: "System.Speech", speak };
   }
-  for (const e of ["espeak-ng", "espeak"]) {
-    if (await onPath(e)) return { name: e, speak: (t, f) => ok(run(e, ["-w", f, t])) };
-  }
-  if (await onPath("pico2wave")) return { name: "pico2wave", speak: (t, f) => ok(run("pico2wave", ["-w", f, t])) };
-  return undefined;
+  return { name, speak: (t, f) => ok(run(name, ["-w", f, t])) };
 }
 
 /** lavfi source for a soft ambient pad: a quiet A-minor-ish sine chord with tremolo and fades. */
-function musicBed(seconds: number): string {
+export function musicBed(seconds: number): string {
   const d = seconds.toFixed(2);
   const fadeOut = Math.max(0, seconds - 2).toFixed(2);
   const tones = [110, 164.81, 220, 261.63]
@@ -102,10 +110,19 @@ export async function addAudio(o: AudioOptions): Promise<string | undefined> {
     await rm(tmp, { recursive: true, force: true });
     return undefined;
   }
-  const inputs = ["-i", o.video, ...clips.flatMap((c) => ["-i", c.file])];
+  const out = path.join(o.outDir, "demo-audio.mp4");
+  const r = await run("ffmpeg", audioMixArgs(o.video, clips, o.music, secs, out));
+  await rm(tmp, { recursive: true, force: true });
+  if (r.code !== 0) throw new Error(`ffmpeg audio mux failed:\n${r.stderr.slice(-800)}`);
+  return out;
+}
+
+/** ffmpeg args that mix a music bed and/or voice clips (at their cue times) onto `video`. */
+export function audioMixArgs(video: string, clips: { file: string; t: number }[], music: boolean, secs: number, out: string): string[] {
+  const inputs = ["-i", video, ...clips.flatMap((c) => ["-i", c.file])];
   const parts: string[] = [];
   const mixIn: string[] = [];
-  if (o.music) {
+  if (music) {
     parts.push(musicBed(secs));
     mixIn.push("[music]");
   }
@@ -115,11 +132,7 @@ export async function addAudio(o: AudioOptions): Promise<string | undefined> {
     mixIn.push(`[v${i}]`);
   });
   parts.push(`${mixIn.join("")}amix=inputs=${mixIn.length}:duration=longest:normalize=0[aout]`);
-  const out = path.join(o.outDir, "demo-audio.mp4");
-  const r = await run("ffmpeg", ["-y", ...inputs, "-filter_complex", parts.join(";"),
+  return ["-y", ...inputs, "-filter_complex", parts.join(";"),
     "-map", "0:v", "-map", "[aout]", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
-    "-t", secs.toFixed(2), "-movflags", "+faststart", out]);
-  await rm(tmp, { recursive: true, force: true });
-  if (r.code !== 0) throw new Error(`ffmpeg audio mux failed:\n${r.stderr.slice(-800)}`);
-  return out;
+    "-t", secs.toFixed(2), "-movflags", "+faststart", out];
 }

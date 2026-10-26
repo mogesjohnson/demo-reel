@@ -1,0 +1,13 @@
+[
+  { "href": "https://app.test/", "attr": "/", "text": "Home" },
+  { "href": "https://app.test/#top", "attr": "#top", "text": "Top" },
+  { "href": "mailto:hi@app.test", "attr": "mailto:hi@app.test", "text": "Mail" },
+  { "href": "tel:5550100", "attr": "tel:5550100", "text": "Call" },
+  { "href": "https://other.test/x", "attr": "https://other.test/x", "text": "Other" },
+  { "href": "https://app.test/about", "attr": "/about", "text": "About" },
+  { "href": "https://app.test/about#team", "attr": "/about#team", "text": "Team" },
+  { "href": "https://app.test/guide.pdf", "attr": "/guide.pdf", "text": "PDF" },
+  { "href": "https://app.test/blog?p=2", "attr": "/blog?p=2", "text": "" },
+  { "href": "https://app.test/docs", "attr": "/docs", "text": "Docs" },
+  { "href": "https://app.test/extra", "attr": "/extra", "text": "Extra" }
+]
