@@ -5,7 +5,11 @@ on:
     branches: [main]
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -13,5 +17,31 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npx tsc
-      - run: npm test
+      - name: typecheck
+        run: npx tsc --noEmit
+      - name: build
+        run: npm run build
+      - name: test
+        run: npm test
+  action-yml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: action.yml parses as YAML
+        run: |
+          npx --yes js-yaml@4 action.yml > action.json
+          node -e "const a=require('./action.json'); for (const k of ['name','description','inputs','runs']) if (!(k in a)) throw new Error('action.yml is missing '+k); if (a.runs.using!=='composite') throw new Error('runs.using must be composite'); console.log('action.yml ok:', a.name)"
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: smoke recording of a local fixture
+        run: node test/smoke.js
