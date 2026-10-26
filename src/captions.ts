@@ -21,8 +21,12 @@ function installOverlays(): void {
   const Z = "2147483647";
 
   const luminance = (): number => {
-    const els = [document.body, document.documentElement].filter(Boolean) as HTMLElement[];
-    for (const el of els) {
+    // Walk up from the element at the viewport center to the first opaque background.
+    const chain: Element[] = [];
+    const hits = document.elementsFromPoint(innerWidth / 2, innerHeight / 2).filter((e) => !e.id.startsWith("__demo-reel"));
+    for (let e: Element | null = hits[0] ?? null; e; e = e.parentElement) chain.push(e);
+    chain.push(...([document.body, document.documentElement].filter(Boolean) as Element[]));
+    for (const el of chain) {
       const m = getComputedStyle(el).backgroundColor.match(/[\d.]+/g);
       if (!m) continue;
       const [r, g, b, a = 1] = m.map(Number);
