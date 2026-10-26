@@ -1,0 +1,7 @@
+node_modules/
+dist/
+demo-reel-out/
+*.webm
+*.mp4
+*.gif
+.env*
