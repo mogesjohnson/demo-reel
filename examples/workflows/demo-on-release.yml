@@ -1,0 +1,31 @@
+# Copy to .github/workflows/ in your app's repo.
+name: Demo on release
+on:
+  release:
+    types: [published]
+permissions:
+  contents: write
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: mogesjohnson/demo-reel@main
+        with:
+          url: https://your-app.example.com
+          # script: demo.json
+          out: demo-reel-out
+          size: 720p
+          args: --mp4 --gif
+      - name: Commit demo to docs/
+        run: |
+          mkdir -p docs
+          cp demo-reel-out/demo.mp4 demo-reel-out/demo.gif docs/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/demo.mp4 docs/demo.gif
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git commit -m "docs: update demo for ${{ github.event.release.tag_name }}"
+          git push origin HEAD:${{ github.event.repository.default_branch }}

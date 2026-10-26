@@ -1,0 +1,66 @@
+name: demo-reel
+description: Record a short walkthrough video of a web app with demo-reel and upload it as an artifact.
+branding:
+  icon: video
+  color: blue
+inputs:
+  url:
+    description: URL of the page to record (http or https)
+    required: true
+  script:
+    description: Optional path to a demo.json walkthrough script
+    required: false
+    default: ""
+  out:
+    description: Output directory
+    required: false
+    default: demo-reel-out
+  size:
+    description: 720p, 1080p or mobile
+    required: false
+    default: 720p
+  args:
+    description: Extra CLI flags, for example "--gif --mp4 --music"
+    required: false
+    default: "--mp4 --gif"
+  artifact-name:
+    description: Name of the uploaded artifact
+    required: false
+    default: demo-reel
+outputs:
+  out:
+    description: Output directory containing demo.webm (and demo.mp4/demo.gif when requested)
+    value: ${{ inputs.out }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 20
+    - name: Install ffmpeg
+      shell: bash
+      run: command -v ffmpeg >/dev/null || (sudo apt-get update -q && sudo apt-get install -y -q ffmpeg)
+    - name: Build demo-reel
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        npm ci
+        npx playwright install --with-deps chromium
+        npx tsc
+    - name: Record
+      shell: bash
+      env:
+        DR_URL: ${{ inputs.url }}
+        DR_SCRIPT: ${{ inputs.script }}
+        DR_OUT: ${{ inputs.out }}
+        DR_SIZE: ${{ inputs.size }}
+        DR_ARGS: ${{ inputs.args }}
+      run: |
+        set -- "$DR_URL" --out "$DR_OUT" --size "$DR_SIZE"
+        if [ -n "$DR_SCRIPT" ]; then set -- "$@" --script "$DR_SCRIPT"; fi
+        # shellcheck disable=SC2086
+        node "${{ github.action_path }}/dist/cli.js" "$@" $DR_ARGS
+    - uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ inputs.out }}

@@ -126,3 +126,19 @@ demo-reel https://example.com --write-script demo.json --record # write it, then
 ```
 
 The page is loaded once and its main headings, nav links, primary button and first form are turned into steps: scroll to each heading, fill form inputs with sample data by input type (never submitted), and click nav links with captions. Edit the JSON and pass it back with `--script`.
+
+## GitHub Action
+
+`action.yml` at the repo root is a composite action: it sets up Node 20, installs ffmpeg if missing, runs `npx playwright install --with-deps chromium`, builds demo-reel, records your URL and uploads the output directory as an artifact.
+
+```yaml
+- uses: mogesjohnson/demo-reel@main
+  with:
+    url: https://your-app.example.com
+    script: demo.json   # optional
+    out: demo-reel-out  # default
+    size: 720p          # 720p | 1080p | mobile
+    args: --mp4 --gif   # extra CLI flags (default)
+```
+
+[`examples/workflows/demo-on-release.yml`](examples/workflows/demo-on-release.yml) runs on `release: published`, records the demo and commits `demo.mp4`/`demo.gif` to `docs/` as `github-actions[bot]` with a normal push (never a force-push). Copy it into `.github/workflows/` in your app's repo.
