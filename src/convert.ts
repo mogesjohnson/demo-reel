@@ -18,15 +18,26 @@ export async function hasFfmpeg(): Promise<boolean> {
   return r.code === 0;
 }
 
-export async function toGif(webm: string, outDir: string): Promise<string> {
+/** Trim `lead` seconds of blank frames from the start; returns the trimmed webm path. */
+export async function trimLead(webm: string, lead: number): Promise<string> {
+  if (lead < 0.05) return webm;
+  const tmp = webm.replace(/\.webm$/, ".trim.webm");
+  const r = await run("ffmpeg", ["-y", "-ss", lead.toFixed(2), "-i", webm, "-c:v", "libvpx", "-b:v", "2M", "-crf", "10", "-deadline", "realtime", "-cpu-used", "8", tmp]);
+  if (r.code !== 0) return webm;
+  await import("node:fs/promises").then((fs) => fs.rename(tmp, webm));
+  return webm;
+}
+
+export async function toGif(webm: string, outDir: string, maxSeconds?: number): Promise<string> {
   const palette = path.join(outDir, ".palette.png");
   const gif = path.join(outDir, "demo.gif");
-  const filters = "fps=10,scale=800:-1:flags=lanczos";
-  let r = await run("ffmpeg", ["-y", "-i", webm, "-vf", `${filters},palettegen`, palette]);
+  const filters = "fps=10,scale=720:-1:flags=lanczos";
+  const limit = maxSeconds && maxSeconds > 0 ? ["-t", String(maxSeconds)] : [];
+  let r = await run("ffmpeg", ["-y", ...limit, "-i", webm, "-vf", `${filters},palettegen=max_colors=128:stats_mode=diff`, palette]);
   if (r.code !== 0) throw new Error(`ffmpeg palettegen failed:\n${r.stderr.slice(-800)}`);
   r = await run("ffmpeg", [
-    "-y", "-i", webm, "-i", palette,
-    "-lavfi", `${filters}[x];[x][1:v]paletteuse`,
+    "-y", ...limit, "-i", webm, "-i", palette,
+    "-lavfi", `${filters}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle`,
     gif,
   ]);
   await import("node:fs/promises").then((fs) => fs.rm(palette, { force: true }));
@@ -46,13 +57,21 @@ export async function toMp4(webm: string, outDir: string): Promise<string> {
   return mp4;
 }
 
-export async function convert(webm: string, outDir: string, want: { gif: boolean; mp4: boolean }): Promise<ConvertResult> {
-  if (!want.gif && !want.mp4) return {};
+export async function convert(
+  webm: string,
+  outDir: string,
+  want: { gif: boolean; mp4: boolean; leadSeconds?: number; gifSeconds?: number },
+): Promise<ConvertResult> {
   if (!(await hasFfmpeg())) {
-    return { skipped: "ffmpeg was not found on PATH, so gif/mp4 conversion was skipped (install it yourself to enable)." };
+    if (!want.gif && !want.mp4) return {};
+    return { skipped: "ffmpeg was not found on PATH, so trimming and gif/mp4 conversion were skipped (install it yourself to enable)." };
   }
   const res: ConvertResult = {};
+  if (want.leadSeconds) {
+    await trimLead(webm, want.leadSeconds);
+    res.trimmed = want.leadSeconds;
+  }
   if (want.mp4) res.mp4Path = await toMp4(webm, outDir);
-  if (want.gif) res.gifPath = await toGif(webm, outDir);
+  if (want.gif) res.gifPath = await toGif(webm, outDir, want.gifSeconds);
   return res;
 }

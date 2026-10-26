@@ -11,12 +11,17 @@ const USAGE = `Usage: demo-reel <url> [--script demo.json] [--out dir] [--gif] [
 
   --script <file>  JSON walkthrough script (default: automatic walkthrough)
   --out <dir>      Output directory (default: ./demo-reel-out)
-  --gif            Also write demo.gif (needs ffmpeg on PATH)
+  --gif            Also write demo.gif (720px wide, fps 10, 128 colors; needs ffmpeg)
+  --gif-seconds <n> Limit the gif to the first n seconds
   --mp4            Also write demo.mp4 (needs ffmpeg on PATH)
+  --size <preset>  720p (1280x720, default), 1080p (1920x1080) or mobile (390x844)
+  --title <text>   Intro card title (default: the page title)
+  --author <name>  Outro card "Built by" name (default: git user.name)
+  --no-cards       Skip the intro and outro cards
   -h, --help       Show this help`;
 
 export function parseArgs(argv: string[]): CliOptions {
-  const opts: Partial<CliOptions> = { outDir: "demo-reel-out", gif: false, mp4: false };
+  const opts: Partial<CliOptions> = { outDir: "demo-reel-out", gif: false, mp4: false, size: "720p", cards: true };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => {
@@ -31,6 +36,18 @@ export function parseArgs(argv: string[]): CliOptions {
     else if (a === "--out") opts.outDir = val();
     else if (a === "--gif") opts.gif = true;
     else if (a === "--mp4") opts.mp4 = true;
+    else if (a === "--no-cards") opts.cards = false;
+    else if (a === "--title") opts.title = val();
+    else if (a === "--author") opts.author = val();
+    else if (a === "--size") {
+      const v = val();
+      if (v !== "720p" && v !== "1080p" && v !== "mobile") throw new Error(`--size must be 720p, 1080p or mobile (got ${v})`);
+      opts.size = v;
+    } else if (a === "--gif-seconds") {
+      const n = Number(val());
+      if (!Number.isFinite(n) || n <= 0) throw new Error("--gif-seconds must be a positive number");
+      opts.gifSeconds = n;
+    }
     else if (a.startsWith("-")) throw new Error(`Unknown option ${a}`);
     else if (!opts.url) opts.url = a;
     else throw new Error(`Unexpected argument ${a}`);
@@ -73,12 +90,24 @@ async function main(): Promise<void> {
   const outDir = path.resolve(opts.outDir);
   const log = (m: string) => console.log(`[demo-reel] ${m}`);
 
-  const { webmPath } = await record({ url: opts.url, outDir, script, log });
+  const { webmPath, leadSeconds } = await record({
+    url: opts.url,
+    outDir,
+    script,
+    log,
+    size: opts.size,
+    cards: opts.cards ? { title: opts.title, author: opts.author } : false,
+  });
+  const conv = await convert(webmPath, outDir, {
+    gif: opts.gif,
+    mp4: opts.mp4,
+    leadSeconds,
+    gifSeconds: opts.gifSeconds,
+  });
+  if (conv.skipped) log(conv.skipped);
+  if (conv.trimmed) log(`trimmed ${conv.trimmed}s of blank frames`);
   const size = (await stat(webmPath)).size;
   log(`saved ${webmPath} (${(size / 1024).toFixed(0)} KB)`);
-
-  const conv = await convert(webmPath, outDir, { gif: opts.gif, mp4: opts.mp4 });
-  if (conv.skipped) log(conv.skipped);
   if (conv.mp4Path) log(`saved ${conv.mp4Path}`);
   if (conv.gifPath) log(`saved ${conv.gifPath}`);
 
