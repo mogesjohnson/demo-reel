@@ -107,3 +107,22 @@ because they are over 2 MB; run the command above to make your own.
 ## License
 
 MIT
+
+## Music and voiceover
+
+```sh
+demo-reel https://example.com --mp4 --music --voice
+```
+
+- `--music` generates a quiet ambient chord bed with ffmpeg's lavfi sine sources (tremolo, fade in/out). Nothing is downloaded.
+- `--voice` speaks each caption with a TTS engine that is already installed: `say` (macOS), PowerShell System.Speech (Windows), or `espeak-ng`/`espeak`/`pico2wave` (Linux). If none is found it prints a skip message.
+- Caption timestamps are recorded during the run; each spoken clip is placed at its timestamp (`adelay` + `amix`) and the mix is muxed into `demo-audio.mp4`. Without ffmpeg, both flags are skipped with a message.
+
+## Auto-generated scripts
+
+```sh
+demo-reel https://example.com --write-script demo.json          # write the script and exit
+demo-reel https://example.com --write-script demo.json --record # write it, then record with it
+```
+
+The page is loaded once and its main headings, nav links, primary button and first form are turned into steps: scroll to each heading, fill form inputs with sample data by input type (never submitted), and click nav links with captions. Edit the JSON and pass it back with `--script`.
