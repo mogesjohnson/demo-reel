@@ -19,16 +19,32 @@ npx tsc
 
 ```sh
 node dist/cli.js <url> [--script demo.json] [--out dir] [--gif] [--mp4]
+  [--size 720p|1080p|mobile] [--title text] [--author name] [--no-cards] [--gif-seconds n]
 ```
 
 | Option | Meaning |
 | --- | --- |
 | `--script <file>` | Run a JSON walkthrough script instead of the automatic one |
 | `--out <dir>` | Output directory (default `./demo-reel-out`) |
-| `--gif` | Also write `demo.gif` (fps 10, 800px wide, two-pass palette) |
+| `--gif` | Also write `demo.gif` (fps 10, 720px wide, two-pass palette with 128 colors) |
+| `--gif-seconds <n>` | Limit the gif to the first `n` seconds |
 | `--mp4` | Also write `demo.mp4` (libx264, yuv420p) |
+| `--size <preset>` | `720p` (1280x720, default), `1080p` (1920x1080) or `mobile` (390x844) |
+| `--title <text>` | Intro card title (default: the page title) |
+| `--author <name>` | Outro card "Built by" name (default: `git config user.name`) |
+| `--no-cards` | Skip the 2 second intro and outro title cards |
 
-If `ffmpeg` is not on PATH, `--gif` and `--mp4` are skipped with a message.
+With `ffmpeg` on PATH, demo-reel also trims the blank frames before the first paint.
+If `ffmpeg` is not on PATH, trimming, `--gif` and `--mp4` are skipped with a message.
+
+## What the video shows
+
+- Intro and outro cards: a full-screen title card (page title or `--title`, plus the URL)
+  and a "Built by" card, about 2 seconds each.
+- Captions: a high-contrast pill at the bottom center. It is bright on dark pages and dark
+  on light pages, picked from the page's computed background luminance.
+- Camera: eased scrolling (requestAnimationFrame, easeInOut) that pauses briefly at headings and images.
+- Cursor: a visible pointer that glides to each click target and nav link, with a ripple on click.
 
 Output in the out dir:
 
@@ -64,7 +80,7 @@ With no script, demo-reel:
 
 | Action | Needs | Notes |
 | --- | --- | --- |
-| `click` | `selector` | Clicks the first match, then waits for the page to settle |
+| `click` | `selector` | Moves the cursor to the first match, ripples, clicks, then waits for the page to settle |
 | `type` | `selector`, `text` | Types with a short per-key delay |
 | `wait` | `ms` or `selector` | Sleeps, or waits for the selector (timeout `ms`, default 10s) |
 | `scroll` | `y` or `selector` | Smooth-scrolls to a y offset or to the element |
