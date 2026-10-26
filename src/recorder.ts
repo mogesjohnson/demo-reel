@@ -1,10 +1,16 @@
 import { chromium, type Page } from "playwright";
 import { mkdir, rename, copyFile, unlink } from "node:fs/promises";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { Captions } from "./captions";
 import type { DemoScript, Step } from "./script";
 
-const SIZE = { width: 1280, height: 720 };
+export const SIZES = {
+  "720p": { width: 1280, height: 720 },
+  "1080p": { width: 1920, height: 1080 },
+  mobile: { width: 390, height: 844 },
+} as const;
+export type SizeName = keyof typeof SIZES;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export interface RecordOptions {
@@ -12,6 +18,15 @@ export interface RecordOptions {
   outDir: string;
   script?: DemoScript;
   log?: (msg: string) => void;
+  size?: SizeName;
+  /** Intro/outro cards; omit or set false to disable. */
+  cards?: { title?: string; author?: string } | false;
+}
+
+export interface Recording {
+  webmPath: string;
+  /** Seconds of blank video before the first paint (for trimming). */
+  leadSeconds: number;
 }
 
 async function settle(page: Page, timeout = 10_000): Promise<void> {
@@ -22,16 +37,77 @@ async function settle(page: Page, timeout = 10_000): Promise<void> {
   }
 }
 
-/** Scroll in small steps to `targetY` so the motion looks smooth on video. */
-async function smoothScrollTo(page: Page, targetY: number, step = 120, delay = 40): Promise<void> {
+/** Eased (easeInOut) scroll to `targetY` driven by requestAnimationFrame. */
+async function smoothScrollTo(page: Page, targetY: number, pxPerSec = 900): Promise<void> {
   const startY = await page.evaluate(() => window.scrollY);
-  const dist = targetY - startY;
-  const n = Math.max(1, Math.ceil(Math.abs(dist) / step));
-  for (let i = 1; i <= n; i++) {
-    const y = Math.round(startY + (dist * i) / n);
-    await page.evaluate((yy) => window.scrollTo(0, yy), y);
-    await sleep(delay);
+  const ms = Math.min(4000, Math.max(300, (Math.abs(targetY - startY) / pxPerSec) * 1000));
+  await page.evaluate(
+    ([from, to, dur]) =>
+      new Promise<void>((resolve) => {
+        const t0 = performance.now();
+        const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+        const tick = (now: number) => {
+          const t = Math.min(1, (now - t0) / dur);
+          window.scrollTo(0, from + (to - from) * ease(t));
+          if (t < 1) requestAnimationFrame(tick);
+          else resolve();
+        };
+        requestAnimationFrame(tick);
+      }),
+    [startY, targetY, ms] as const,
+  );
+}
+
+/** Scroll down, pausing briefly when a heading or image comes into view. */
+async function tourDown(page: Page, maxY: number): Promise<void> {
+  const stops = await page.evaluate((limit) => {
+    const ys = Array.from(document.querySelectorAll("h1, h2, h3, img"))
+      .filter((el) => (el as HTMLElement).offsetHeight > 40 || /^H/.test(el.tagName))
+      .map((el) => Math.round(el.getBoundingClientRect().top + window.scrollY - window.innerHeight * 0.3))
+      .filter((y) => y > 80 && y < limit)
+      .sort((a, b) => a - b);
+    const out: number[] = [];
+    for (const y of ys) if (!out.length || y - out[out.length - 1] > 350) out.push(y);
+    return out.slice(0, 6);
+  }, maxY);
+  for (const y of stops) {
+    await smoothScrollTo(page, y);
+    await sleep(450);
   }
+  await smoothScrollTo(page, maxY);
+}
+
+/** Move the fake cursor to the element center and ripple; returns false if not visible. */
+async function pointAt(page: Page, captions: Captions, selector: string): Promise<boolean> {
+  try {
+    const loc = page.locator(selector).first();
+    await loc.scrollIntoViewIfNeeded({ timeout: 3000 });
+    const box = await loc.boundingBox();
+    if (!box) return false;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await captions.moveCursor(x, y, 650);
+    await captions.ripple(x, y);
+    await sleep(250);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function gitUser(): string | undefined {
+  try {
+    return execFileSync("git", ["config", "user.name"], { encoding: "utf8" }).trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function showCard(captions: Captions, title: string, sub: string): Promise<void> {
+  await captions.card(title, sub);
+  await sleep(2000);
+  await captions.hideCard();
+  await sleep(400);
 }
 
 async function scrollHeight(page: Page): Promise<number> {
@@ -43,6 +119,7 @@ async function scrollHeight(page: Page): Promise<number> {
 interface NavLink {
   href: string;
   text: string;
+  attr: string;
 }
 
 /** Up to `max` same-origin links, preferring nav/header, deduped, no hashes or mailto. */
@@ -73,7 +150,7 @@ async function findNavLinks(page: Page, max = 3): Promise<NavLink[]> {
     const key = u.origin + u.pathname + u.search;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ href: u.origin + u.pathname + u.search, text: l.text || u.pathname });
+    out.push({ href: u.origin + u.pathname + u.search, text: l.text || u.pathname, attr: l.attr });
   }
   return out;
 }
@@ -90,7 +167,7 @@ async function defaultWalkthrough(page: Page, captions: Captions, url: string, l
   const h = await scrollHeight(page);
   if (h > 0) {
     await captions.show("Scrolling through");
-    await smoothScrollTo(page, h);
+    await tourDown(page, h);
     await sleep(500);
     await smoothScrollTo(page, 0);
     await sleep(500);
@@ -100,6 +177,9 @@ async function defaultWalkthrough(page: Page, captions: Captions, url: string, l
   for (const link of links) {
     const label = link.text.replace(/\s+/g, " ").slice(0, 40);
     log(`visiting ${link.href}`);
+    const sel = `a[href=${JSON.stringify(link.attr)}]`;
+    await captions.show(`Visiting: ${label}`);
+    await pointAt(page, captions, `nav ${sel}, header ${sel}, ${sel}`);
     try {
       await gotoAndSettle(page, captions, link.href);
     } catch (e) {
@@ -128,6 +208,7 @@ async function runStep(page: Page, captions: Captions, step: Step, baseUrl: stri
   switch (step.action) {
     case "click": {
       const before = page.url();
+      await pointAt(page, captions, step.selector!);
       await page.locator(step.selector!).first().click({ timeout: 10_000 });
       await settle(page, 5_000);
       if (page.url() !== before) await captions.reinject();
@@ -160,22 +241,37 @@ async function runStep(page: Page, captions: Captions, step: Step, baseUrl: stri
 }
 
 /** Record the walkthrough and return the path of the saved .webm. */
-export async function record(opts: RecordOptions): Promise<string> {
+export async function record(opts: RecordOptions): Promise<Recording> {
   const log = opts.log ?? (() => {});
   await mkdir(opts.outDir, { recursive: true });
   const tmpDir = path.join(opts.outDir, ".raw");
   const browser = await chromium.launch({ headless: true });
   let webm: string | undefined;
+  let leadSeconds = 0;
+  const SIZE = SIZES[opts.size ?? "720p"];
   try {
     const context = await browser.newContext({
       viewport: SIZE,
       recordVideo: { dir: tmpDir, size: SIZE },
     });
     const page = await context.newPage();
+    const t0 = Date.now();
     const captions = await Captions.attach(context, page);
     try {
       log(`loading ${opts.url}`);
-      await gotoAndSettle(page, captions, opts.url);
+      await page.goto(opts.url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      const fcp = await page
+        .evaluate(() => performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? 0)
+        .catch(() => 0);
+      const navStart = Date.now() - (await page.evaluate(() => performance.now()).catch(() => 0));
+      leadSeconds = Math.max(0, (navStart + fcp - t0) / 1000 - 0.1);
+      await settle(page);
+      await captions.reinject();
+      const cards = opts.cards === false ? undefined : opts.cards ?? {};
+      if (cards) {
+        const title = cards.title || (await page.title()) || new URL(opts.url).hostname;
+        await showCard(captions, title, opts.url);
+      }
       if (opts.script) {
         for (const [i, step] of opts.script.steps.entries()) {
           log(`step ${i + 1}/${opts.script.steps.length}: ${step.action}`);
@@ -184,6 +280,10 @@ export async function record(opts: RecordOptions): Promise<string> {
         await sleep(800);
       } else {
         await defaultWalkthrough(page, captions, opts.url, log);
+      }
+      if (cards) {
+        await captions.show("");
+        await showCard(captions, `Built by ${cards.author || gitUser() || "the author"}`, opts.url);
       }
     } finally {
       const video = page.video();
@@ -202,5 +302,5 @@ export async function record(opts: RecordOptions): Promise<string> {
     await unlink(webm).catch(() => {});
   }
   await import("node:fs/promises").then((fs) => fs.rm(tmpDir, { recursive: true, force: true }));
-  return dest;
+  return { webmPath: dest, leadSeconds: Math.round(leadSeconds * 100) / 100 };
 }

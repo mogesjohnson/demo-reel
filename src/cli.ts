@@ -73,7 +73,7 @@ async function main(): Promise<void> {
   const outDir = path.resolve(opts.outDir);
   const log = (m: string) => console.log(`[demo-reel] ${m}`);
 
-  const webmPath = await record({ url: opts.url, outDir, script, log });
+  const { webmPath } = await record({ url: opts.url, outDir, script, log });
   const size = (await stat(webmPath)).size;
   log(`saved ${webmPath} (${(size / 1024).toFixed(0)} KB)`);
 
