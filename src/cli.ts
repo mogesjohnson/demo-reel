@@ -18,6 +18,7 @@ const USAGE = `Usage: demo-reel <url> [--script demo.json] [--out dir] [--gif] [
   --title <text>   Intro card title (default: the page title)
   --author <name>  Outro card "Built by" name (default: git user.name)
   --no-cards       Skip the intro and outro cards
+  --no-zoom        Do not zoom into click and type targets
   -h, --help       Show this help`;
 
 export function parseArgs(argv: string[]): CliOptions {
@@ -37,6 +38,7 @@ export function parseArgs(argv: string[]): CliOptions {
     else if (a === "--gif") opts.gif = true;
     else if (a === "--mp4") opts.mp4 = true;
     else if (a === "--no-cards") opts.cards = false;
+    else if (a === "--no-zoom") opts.zoom = false;
     else if (a === "--title") opts.title = val();
     else if (a === "--author") opts.author = val();
     else if (a === "--size") {
@@ -97,6 +99,7 @@ async function main(): Promise<void> {
     log,
     size: opts.size,
     cards: opts.cards ? { title: opts.title, author: opts.author } : false,
+    zoom: opts.zoom,
   });
   const conv = await convert(webmPath, outDir, {
     gif: opts.gif,
