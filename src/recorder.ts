@@ -3,6 +3,9 @@ import { mkdir, rename, copyFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { Captions } from "./captions";
+import { zoomPulse } from "./zoom";
+
+let zoomEnabled = true;
 import type { DemoScript, Step } from "./script";
 
 export const SIZES = {
@@ -21,6 +24,8 @@ export interface RecordOptions {
   size?: SizeName;
   /** Intro/outro cards; omit or set false to disable. */
   cards?: { title?: string; author?: string } | false;
+  /** Zoom into click and type targets (default true). */
+  zoom?: boolean;
 }
 
 export interface Recording {
@@ -87,7 +92,8 @@ async function pointAt(page: Page, captions: Captions, selector: string): Promis
     const x = box.x + box.width / 2;
     const y = box.y + box.height / 2;
     await captions.moveCursor(x, y, 650);
-    await captions.ripple(x, y);
+    if (zoomEnabled) await zoomPulse(page, x, y, () => captions.ripple(x, y));
+    else await captions.ripple(x, y);
     await sleep(250);
     return true;
   } catch {
@@ -215,6 +221,7 @@ async function runStep(page: Page, captions: Captions, step: Step, baseUrl: stri
       break;
     }
     case "type":
+      await pointAt(page, captions, step.selector!);
       await page.locator(step.selector!).first().pressSequentially(step.text!, { delay: 60 });
       break;
     case "wait":
@@ -248,6 +255,7 @@ export async function record(opts: RecordOptions): Promise<Recording> {
   const browser = await chromium.launch({ headless: true });
   let webm: string | undefined;
   let leadSeconds = 0;
+  zoomEnabled = opts.zoom !== false;
   const SIZE = SIZES[opts.size ?? "720p"];
   try {
     const context = await browser.newContext({

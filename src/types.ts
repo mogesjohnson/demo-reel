@@ -6,6 +6,7 @@ export interface CliOptions {
   mp4: boolean;
   size: "720p" | "1080p" | "mobile";
   cards: boolean;
+  zoom?: boolean;
   title?: string;
   author?: string;
   gifSeconds?: number;
