@@ -26,6 +26,7 @@ const USAGE = `Usage: demo-reel <url> [--script demo.json] [--out dir] [--gif] [
                    Audio is muxed into demo-audio.mp4 (needs ffmpeg)
   --write-script <file>  Inspect the page and write a demo script, then exit
   --record         With --write-script, also record using the new script
+  --no-zoom        Do not zoom into click and type targets
   -h, --help       Show this help`;
 
 export function parseArgs(argv: string[]): CliOptions {
@@ -49,6 +50,7 @@ export function parseArgs(argv: string[]): CliOptions {
     else if (a === "--voice") opts.voice = true;
     else if (a === "--write-script") opts.writeScript = val();
     else if (a === "--record") opts.record = true;
+    else if (a === "--no-zoom") opts.zoom = false;
     else if (a === "--title") opts.title = val();
     else if (a === "--author") opts.author = val();
     else if (a === "--size") {
@@ -115,6 +117,7 @@ async function main(): Promise<void> {
     log,
     size: opts.size,
     cards: opts.cards ? { title: opts.title, author: opts.author } : false,
+    zoom: opts.zoom,
   });
   const conv = await convert(webmPath, outDir, {
     gif: opts.gif,
@@ -138,7 +141,9 @@ async function main(): Promise<void> {
   log(`wrote ${snippet}`);
 }
 
-main().catch((e) => {
-  console.error(`demo-reel: ${(e as Error).message}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(`demo-reel: ${(e as Error).message}`);
+    process.exit(1);
+  });
+}

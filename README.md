@@ -19,7 +19,7 @@ npx tsc
 
 ```sh
 node dist/cli.js <url> [--script demo.json] [--out dir] [--gif] [--mp4]
-  [--size 720p|1080p|mobile] [--title text] [--author name] [--no-cards] [--gif-seconds n]
+  [--size 720p|1080p|mobile] [--title text] [--author name] [--no-cards] [--no-zoom] [--gif-seconds n]
 ```
 
 | Option | Meaning |
@@ -33,6 +33,7 @@ node dist/cli.js <url> [--script demo.json] [--out dir] [--gif] [--mp4]
 | `--title <text>` | Intro card title (default: the page title) |
 | `--author <name>` | Outro card "Built by" name (default: `git config user.name`) |
 | `--no-cards` | Skip the 2 second intro and outro title cards |
+| `--no-zoom` | Do not zoom into click and type targets |
 
 With `ffmpeg` on PATH, demo-reel also trims the blank frames before the first paint.
 If `ffmpeg` is not on PATH, trimming, `--gif` and `--mp4` are skipped with a message.
@@ -45,6 +46,8 @@ If `ffmpeg` is not on PATH, trimming, `--gif` and `--mp4` are skipped with a mes
   on light pages, picked from the page's computed background luminance.
 - Camera: eased scrolling (requestAnimationFrame, easeInOut) that pauses briefly at headings and images.
 - Cursor: a visible pointer that glides to each click target and nav link, with a ripple on click.
+- Zoom: before each click or type target (script steps and nav-link visits) the page eases into
+  the target over about 600ms, holds about 800ms, then zooms back out. Turn it off with `--no-zoom`.
 
 Output in the out dir:
 
