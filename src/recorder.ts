@@ -3,6 +3,7 @@ import { mkdir, rename, copyFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { Captions } from "./captions";
+import type { Cue } from "./audio";
 import type { DemoScript, Step } from "./script";
 
 export const SIZES = {
@@ -27,6 +28,8 @@ export interface Recording {
   webmPath: string;
   /** Seconds of blank video before the first paint (for trimming). */
   leadSeconds: number;
+  /** Caption timestamps, in seconds from the start of the trimmed video. */
+  cues: Cue[];
 }
 
 async function settle(page: Page, timeout = 10_000): Promise<void> {
@@ -248,6 +251,7 @@ export async function record(opts: RecordOptions): Promise<Recording> {
   const browser = await chromium.launch({ headless: true });
   let webm: string | undefined;
   let leadSeconds = 0;
+  const rawCues: Cue[] = [];
   const SIZE = SIZES[opts.size ?? "720p"];
   try {
     const context = await browser.newContext({
@@ -257,6 +261,11 @@ export async function record(opts: RecordOptions): Promise<Recording> {
     const page = await context.newPage();
     const t0 = Date.now();
     const captions = await Captions.attach(context, page);
+    const show = captions.show.bind(captions);
+    captions.show = async (text: string) => {
+      rawCues.push({ t: (Date.now() - t0) / 1000, text });
+      await show(text);
+    };
     try {
       log(`loading ${opts.url}`);
       await page.goto(opts.url, { waitUntil: "domcontentloaded", timeout: 30_000 });
@@ -302,5 +311,7 @@ export async function record(opts: RecordOptions): Promise<Recording> {
     await unlink(webm).catch(() => {});
   }
   await import("node:fs/promises").then((fs) => fs.rm(tmpDir, { recursive: true, force: true }));
-  return { webmPath: dest, leadSeconds: Math.round(leadSeconds * 100) / 100 };
+  const lead = Math.round(leadSeconds * 100) / 100;
+  const cues = rawCues.filter((c) => c.text).map((c) => ({ t: Math.max(0, Math.round((c.t - lead) * 100) / 100), text: c.text }));
+  return { webmPath: dest, leadSeconds: lead, cues };
 }

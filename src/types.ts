@@ -9,6 +9,10 @@ export interface CliOptions {
   title?: string;
   author?: string;
   gifSeconds?: number;
+  music: boolean;
+  voice: boolean;
+  writeScript?: string;
+  record: boolean;
 }
 
 export interface RecordResult {
