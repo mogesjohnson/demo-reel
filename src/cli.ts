@@ -7,6 +7,9 @@ import { convert } from "./convert";
 import { frameVideo } from "./frame";
 import { hasFfmpeg } from "./convert";
 import { writeSnippet } from "./snippet";
+import { addAudio } from "./audio";
+import { writeAutoScript } from "./autoscript";
+import { writeFile } from "node:fs/promises";
 import type { CliOptions } from "./types";
 
 const USAGE = `Usage: demo-reel <url> [--script demo.json] [--out dir] [--gif] [--mp4]
@@ -20,13 +23,18 @@ const USAGE = `Usage: demo-reel <url> [--script demo.json] [--out dir] [--gif] [
   --title <text>   Intro card title (default: the page title)
   --author <name>  Outro card "Built by" name (default: git user.name)
   --no-cards       Skip the intro and outro cards
+  --music          Add a soft procedural ambient music bed (ffmpeg lavfi; nothing downloaded)
+  --voice          Speak each caption with a local TTS (say, System.Speech, espeak(-ng), pico2wave)
+                   Audio is muxed into demo-audio.mp4 (needs ffmpeg)
+  --write-script <file>  Inspect the page and write a demo script, then exit
+  --record         With --write-script, also record using the new script
   --no-zoom        Do not zoom into click and type targets
   --frame <kind>   browser, phone or none (default): write demo-framed.mp4 with a
                    gradient background and device frame (needs ffmpeg)
   -h, --help       Show this help`;
 
 export function parseArgs(argv: string[]): CliOptions {
-  const opts: Partial<CliOptions> = { outDir: "demo-reel-out", gif: false, mp4: false, size: "720p", cards: true, zoom: true, frame: "none" };
+  const opts: Partial<CliOptions> = { outDir: "demo-reel-out", gif: false, mp4: false, size: "720p", cards: true, music: false, voice: false, record: false, zoom: true, frame: "none" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const val = () => {
@@ -42,6 +50,10 @@ export function parseArgs(argv: string[]): CliOptions {
     else if (a === "--gif") opts.gif = true;
     else if (a === "--mp4") opts.mp4 = true;
     else if (a === "--no-cards") opts.cards = false;
+    else if (a === "--music") opts.music = true;
+    else if (a === "--voice") opts.voice = true;
+    else if (a === "--write-script") opts.writeScript = val();
+    else if (a === "--record") opts.record = true;
     else if (a === "--no-zoom") opts.zoom = false;
     else if (a === "--frame") {
       const v = val();
@@ -97,11 +109,17 @@ async function main(): Promise<void> {
     console.error(`demo-reel: ${(e as Error).message}\n\n${USAGE}`);
     process.exit(2);
   }
-  const script = opts.scriptPath ? await loadScript(opts.scriptPath) : undefined;
-  const outDir = path.resolve(opts.outDir);
   const log = (m: string) => console.log(`[demo-reel] ${m}`);
+  let script = opts.scriptPath ? await loadScript(opts.scriptPath) : undefined;
+  if (opts.writeScript) {
+    script = validateScript(await writeAutoScript(opts.url));
+    await writeFile(opts.writeScript, JSON.stringify(script, null, 2) + "\n");
+    log(`wrote ${opts.writeScript} (${script.steps.length} steps)`);
+    if (!opts.record) return;
+  }
+  const outDir = path.resolve(opts.outDir);
 
-  const { webmPath, leadSeconds } = await record({
+  const { webmPath, leadSeconds, cues } = await record({
     url: opts.url,
     outDir,
     script,
@@ -125,6 +143,11 @@ async function main(): Promise<void> {
   if (opts.frame !== "none") {
     if (await hasFfmpeg()) log(`saved ${await frameVideo(conv.mp4Path ?? webmPath, outDir, opts.frame, opts.url)}`);
     else log(`ffmpeg was not found on PATH, so --frame ${opts.frame} was skipped.`);
+  }
+  if (opts.music || opts.voice) {
+    // The mp4 is already lead-trimmed, so cue times line up with it.
+    const audio = await addAudio({ video: conv.mp4Path ?? webmPath, outDir, cues, music: opts.music, voice: opts.voice, log });
+    if (audio) log(`saved ${audio}`);
   }
 
   const snippet = await writeSnippet({ outDir, url: opts.url, webmPath, ...conv });

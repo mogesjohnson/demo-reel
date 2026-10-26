@@ -11,6 +11,10 @@ export interface CliOptions {
   author?: string;
   gifSeconds?: number;
   frame: "browser" | "phone" | "none";
+  music: boolean;
+  voice: boolean;
+  writeScript?: string;
+  record: boolean;
 }
 
 export interface RecordResult {
