@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { parseArgs } from "./cli";
 import { validateScript } from "./script";
 import { luminanceOf, pillTheme } from "./theme";
+import { esc } from "./frame";
 
 test("parseArgs defaults", () => {
   const o = parseArgs(["https://example.com"]);
@@ -47,4 +48,10 @@ test("pillTheme walks to first opaque background", () => {
   assert.equal(pillTheme(["rgba(0, 0, 0, 0)", "rgb(10, 10, 20)", "rgb(255, 255, 255)"]), "dark");
   assert.equal(pillTheme(["rgb(250, 250, 250)"]), "light");
   assert.equal(pillTheme([]), "light");
+});
+test("frame esc never splits an escape when truncating", () => {
+  const out = esc("a".repeat(79) + ":b");
+  assert.equal(out, "a".repeat(79) + "\\:");
+  assert.ok(!/(^|[^\\])(\\\\)*\\$/.test(out));
+  assert.equal(esc("https://x"), "https\\://x");
 });

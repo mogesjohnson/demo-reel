@@ -20,8 +20,9 @@ function roundAlpha(r: number): string {
   return `geq=r='r(X\\,Y)':g='g(X\\,Y)':b='b(X\\,Y)':a='if(gt(hypot(${dx}\\,${dy})\\,${r})\\,0\\,255)'`;
 }
 
-function esc(text: string): string {
-  return text.replace(/[\\:'%,\[\];]/g, (c) => `\\${c}`).slice(0, 80);
+/** Escape drawtext special characters. Truncate first so an escape is never split. */
+export function esc(text: string): string {
+  return text.slice(0, 80).replace(/[\\:'%,\[\];]/g, (c) => `\\${c}`);
 }
 
 /** Build the filtergraph for the frame around a w x h video. */
