@@ -115,7 +115,9 @@ async function main(): Promise<void> {
   log(`wrote ${snippet}`);
 }
 
-main().catch((e) => {
-  console.error(`demo-reel: ${(e as Error).message}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(`demo-reel: ${(e as Error).message}`);
+    process.exit(1);
+  });
+}
