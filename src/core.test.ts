@@ -172,6 +172,11 @@ test("offsetCues shifts captions by the trimmed lead and clamps at 0", () => {
   assert.deepEqual(cues, [{ t: 0, text: "a" }, { t: 2.26, text: "b" }]);
 });
 
+test("offsetCues drops a caption re-shown back to back but keeps one shown again after a clear", () => {
+  const raw = [{ t: 1, text: "Visiting: About" }, { t: 2, text: "Visiting: About" }, { t: 3, text: "" }, { t: 4, text: "Visiting: About" }];
+  assert.deepEqual(offsetCues(raw, 0), [{ t: 1, text: "Visiting: About" }, { t: 4, text: "Visiting: About" }]);
+});
+
 test("writeSnippet embeds relative gif/mp4 paths", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "dr-snip-"));
   try {
