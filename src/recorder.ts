@@ -329,7 +329,12 @@ export async function record(opts: RecordOptions): Promise<Recording> {
   return { webmPath: dest, leadSeconds: lead, cues };
 }
 
-/** Shift caption times back by the trimmed lead so they match the trimmed video. Pure. */
+/**
+ * Shift caption times back by the trimmed lead so they match the trimmed video, dropping
+ * blank cues and immediate repeats (a caption re-shown after a navigation). Pure.
+ */
 export function offsetCues(raw: Cue[], lead: number): Cue[] {
-  return raw.filter((c) => c.text).map((c) => ({ t: Math.max(0, Math.round((c.t - lead) * 100) / 100), text: c.text }));
+  return raw
+    .filter((c, i) => c.text && (i === 0 || raw[i - 1].text !== c.text))
+    .map((c) => ({ t: Math.max(0, Math.round((c.t - lead) * 100) / 100), text: c.text }));
 }

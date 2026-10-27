@@ -212,7 +212,8 @@ export class Captions {
   async reinject(): Promise<void> {
     try {
       await this.page.evaluate(installOverlays);
-      if (this.current) await this.show(this.current);
+      // Restore without going through show(), which callers may wrap to record cues.
+      if (this.current) await this.call("caption", this.current);
     } catch {
       // Page may be mid-navigation; the init script covers that case.
     }
