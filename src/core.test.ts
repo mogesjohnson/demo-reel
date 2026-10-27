@@ -7,7 +7,7 @@ import path from "node:path";
 import { parseArgs } from "./cli";
 import { validateScript } from "./script";
 import { SIZES, filterNavLinks, offsetCues } from "./recorder";
-import { trimArgs, gifPaletteArgs, gifArgs, mp4Args } from "./convert";
+import { trimArgs, trimLead, gifPaletteArgs, gifArgs, mp4Args } from "./convert";
 import { frameArgs, frameFilter } from "./frame";
 import { audioMixArgs, detectTts, musicBed } from "./audio";
 import { buildSteps, sampleFor, type Found } from "./autoscript";
@@ -200,4 +200,9 @@ test("writeSnippet falls back to webm without mp4", async () => {
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("trimLead reports false when the lead is too short or ffmpeg cannot trim", async () => {
+  assert.equal(await trimLead("missing.webm", 0.01), false);
+  assert.equal(await trimLead("does-not-exist.webm", 1), false);
 });

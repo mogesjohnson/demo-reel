@@ -18,14 +18,17 @@ export async function hasFfmpeg(): Promise<boolean> {
   return r.code === 0;
 }
 
-/** Trim `lead` seconds of blank frames from the start; returns the trimmed webm path. */
-export async function trimLead(webm: string, lead: number): Promise<string> {
-  if (lead < 0.05) return webm;
+/** Trim `lead` seconds of blank frames from the start in place; true only if the webm was trimmed. */
+export async function trimLead(webm: string, lead: number): Promise<boolean> {
+  if (lead < 0.05) return false;
   const tmp = webm.replace(/\.webm$/, ".trim.webm");
   const r = await run("ffmpeg", trimArgs(webm, lead, tmp));
-  if (r.code !== 0) return webm;
+  if (r.code !== 0) {
+    await import("node:fs/promises").then((fs) => fs.rm(tmp, { force: true }));
+    return false;
+  }
   await import("node:fs/promises").then((fs) => fs.rename(tmp, webm));
-  return webm;
+  return true;
 }
 
 /** ffmpeg args that drop the first `lead` seconds of `webm` into `tmp`. */
@@ -84,8 +87,8 @@ export async function convert(
   }
   const res: ConvertResult = {};
   if (want.leadSeconds) {
-    await trimLead(webm, want.leadSeconds);
-    res.trimmed = want.leadSeconds;
+    if (await trimLead(webm, want.leadSeconds)) res.trimmed = want.leadSeconds;
+    else res.trimFailed = true;
   }
   if (want.mp4) res.mp4Path = await toMp4(webm, outDir);
   if (want.gif) res.gifPath = await toGif(webm, outDir, want.gifSeconds);

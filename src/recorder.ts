@@ -35,6 +35,8 @@ export interface Recording {
   leadSeconds: number;
   /** Caption timestamps, in seconds from the start of the trimmed video. */
   cues: Cue[];
+  /** Caption timestamps from the start of the untrimmed video, for use when the trim does not happen. */
+  rawCues: Cue[];
 }
 
 async function settle(page: Page, timeout = 10_000): Promise<void> {
@@ -326,7 +328,7 @@ export async function record(opts: RecordOptions): Promise<Recording> {
   await import("node:fs/promises").then((fs) => fs.rm(tmpDir, { recursive: true, force: true }));
   const lead = Math.round(leadSeconds * 100) / 100;
   const cues = offsetCues(rawCues, lead);
-  return { webmPath: dest, leadSeconds: lead, cues };
+  return { webmPath: dest, leadSeconds: lead, cues, rawCues };
 }
 
 /**

@@ -26,4 +26,6 @@ export interface ConvertResult {
   mp4Path?: string;
   skipped?: string;
   trimmed?: number;
+  /** A lead trim was wanted but ffmpeg failed, so the video still has its blank lead. */
+  trimFailed?: boolean;
 }

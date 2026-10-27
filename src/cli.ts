@@ -2,7 +2,7 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { validateScript, type DemoScript } from "./script";
-import { record } from "./recorder";
+import { offsetCues, record } from "./recorder";
 import { convert } from "./convert";
 import { frameVideo } from "./frame";
 import { hasFfmpeg } from "./convert";
@@ -119,7 +119,7 @@ async function main(): Promise<void> {
   }
   const outDir = path.resolve(opts.outDir);
 
-  const { webmPath, leadSeconds, cues } = await record({
+  const { webmPath, leadSeconds, cues: trimmedCues, rawCues } = await record({
     url: opts.url,
     outDir,
     script,
@@ -136,6 +136,9 @@ async function main(): Promise<void> {
   });
   if (conv.skipped) log(conv.skipped);
   if (conv.trimmed) log(`trimmed ${conv.trimmed}s of blank frames`);
+  if (conv.trimFailed) log(`warning: ffmpeg could not trim the ${leadSeconds}s blank lead, so the video keeps it and captions are not shifted.`);
+  // Cues are shifted for a trimmed video; if no trim happened they must keep the lead.
+  const cues = conv.trimmed ? trimmedCues : offsetCues(rawCues, 0);
   const size = (await stat(webmPath)).size;
   log(`saved ${webmPath} (${(size / 1024).toFixed(0)} KB)`);
   if (conv.mp4Path) log(`saved ${conv.mp4Path}`);
@@ -145,7 +148,7 @@ async function main(): Promise<void> {
     else log(`ffmpeg was not found on PATH, so --frame ${opts.frame} was skipped.`);
   }
   if (opts.music || opts.voice) {
-    // The mp4 is already lead-trimmed, so cue times line up with it.
+    // The mp4 is trimmed only when conv.trimmed is set; `cues` matches either case.
     const audio = await addAudio({ video: conv.mp4Path ?? webmPath, outDir, cues, music: opts.music, voice: opts.voice, log });
     if (audio) log(`saved ${audio}`);
   }
